@@ -33,9 +33,10 @@ WorldInfo {
   ]
 }
 Viewpoint {
-  orientation -0.08064379309027146 0.08467693022849304 0.9931396659700449 1.5289262800254328
-  position 2.6315838961610587 -1.4407047539322746 1.5344956968636472
+  orientation -0.5773502691896258 0.5773502691896258 0.5773502691896258 2.0944
+  position -3.09371445115095 4.060435548893039 8.49898284655339
   near 0.1
+  follow "Robotino 3"
 }
 TexturedBackground {
 }
@@ -99,7 +100,12 @@ Chair {
   rotation 0 0 -1 -0.11945530717958608
 }
 Sofa {
-  translation 0.41 0.68 -0.1
+  translation 0.2 1.7 -0.1
+}
+Sofa {
+  translation 2.1 -0.14 -0.1
+  rotation 0 0 1 1.5708
+  name "sofa(1)"
 }
 Fridge {
   translation -4.42 0 0
@@ -432,7 +438,7 @@ Robot {
   supervisor TRUE
 }
 Armchair {
-  translation 4.14804 0.609032 -0.1
+  translation 4.14804 1.34903 -0.1
   rotation 0 0 1 -3.141495307179586
 }
 Floor {
@@ -445,8 +451,8 @@ HospitalBed {
   rotation 0 0 1 1.5708
 }
 Robot {
-  translation -3.52805 4.20788 0.0166631
-  rotation -0.0016586888988494406 -0.01746226837915152 0.9998461471317431 2.4171954691339104
+  translation -3.093730000000017 4.060420000000004 -0.0022915304566517164
+  rotation -1.854669992572958e-05 -8.755019964940446e-05 -0.9999999959954913 0
   children [
     Pose {
       rotation 0 0 1 1.5707963267948966
@@ -456,7 +462,7 @@ Robot {
           children [
             DEF WHEEL_0 HingeJoint {
               jointParameters HingeJointParameters {
-                position 382.00806684033546
+                position 835.2141670243149
                 axis 0 1 0
               }
               device [
@@ -469,7 +475,7 @@ Robot {
                 }
               ]
               endPoint Solid {
-                rotation 0 1 0 5.016948409560271
+                rotation 0 0.9999999999999999 0 5.8337064766094455
                 children [
                   DEF OMNIWHEEL Shape {
                     appearance PBRAppearance {
@@ -573,7 +579,7 @@ Robot {
           children [
             DEF WHEEL_1 HingeJoint {
               jointParameters HingeJointParameters {
-                position 370.1295045643334
+                position 850.0266684252368
                 axis 0 1 0
               }
               device [
@@ -586,7 +592,7 @@ Robot {
                 }
               ]
               endPoint Solid {
-                rotation 0 0.9999999999999999 0 5.704756747917372
+                rotation 0 -1 0 4.486533351186926
                 children [
                   DEF OMNIWHEEL Shape {
                     appearance PBRAppearance {
@@ -690,7 +696,7 @@ Robot {
           children [
             DEF WHEEL_2 HingeJoint {
               jointParameters HingeJointParameters {
-                position 434.61613004571547
+                position 893.6519257015497
                 axis 0 1 0
               }
               device [
@@ -703,7 +709,7 @@ Robot {
                 }
               ]
               endPoint Solid {
-                rotation 0 -1 0 5.206841456855588
+                rotation 0 1 0 1.439612082048378
                 children [
                   DEF OMNIWHEEL Shape {
                     appearance PBRAppearance {
@@ -805,6 +811,10 @@ Robot {
         GPS {
         }
         DEF EXT_webcam Pose {
+        }
+        Display {
+          width 100
+          height 100
         }
         DEF EXT_platform Pose {
           translation 0 0 0.28
@@ -2510,6 +2520,8 @@ Robot {
               }
             }
           ]
+          name "touchsensor"
+          boundingObject USE base_IR_metal_ring_cover
         }
         DEF head_white_cover Pose {
           translation 0 0 0.035
@@ -4112,5 +4124,5 @@ Robot {
       0 0 -0.1
     ]
   }
-  controller "Robotino_A_star"
+  controller "Robotino_A_star_local_display"
 }
