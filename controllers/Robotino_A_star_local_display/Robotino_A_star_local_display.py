@@ -1,6 +1,6 @@
 """Robotino_careobot controller."""
 
-from controller import Robot, DistanceSensor, Motor, Keyboard, GPS, Compass, Display, TouchSensor
+from controller import Robot, DistanceSensor, Motor, Keyboard, GPS, Compass, Display, TouchSensor, Emitter, Receiver
 import math
 import pickle
 import numpy as np
@@ -52,10 +52,8 @@ grid_file_address = 'D:\\OneDrive - Ostbayerische Technische Hochschule Amberg-W
 # Accelerometer: accelerometer
 # Motors:  wheel0_joint(back), wheel1_joint(rignt), wheel2_joint(left)
 # wheel0_joint_sensor
+# Emitter: RT_emitter
 
-
-
-# PENDING
 
 robot = Robot() # create the Robot instance.
 TIME_STEP = int(robot.getBasicTimeStep()) # get the time step of the current world.
@@ -95,6 +93,11 @@ gps.enable(TIME_STEP)
 compass = robot.getDevice('compass')
 compass.enable(TIME_STEP)
 
+emitter = robot.getDevice('RT_emitter')
+#emitter.enable(TIME_STEP)
+
+receiver = robot.getDevice('RT_receiver')
+receiver.enable(TIME_STEP)
 
 
 class Spot: # ROHAN
@@ -145,7 +148,7 @@ class Spot: # ROHAN
         self.color = TURQUOISE
 
     def occupancy_color(self,value):
-        self.color = YELLOW
+        self.color = 100 * value
 
     def make_path(self):
         self.color = PURPLE
@@ -263,7 +266,7 @@ def set_occupancy_color_in_grid(cost_map,grid):
     for rows in grid: # Finding the End Node
         for obj in rows:
             if obj.color == WHITE:
-                obj.occupancy_color((cm[obj.col,obj.row]*250))
+                obj.occupancy_color((cm[obj.col,obj.row]*150))
 
 # JANVI
 def algorithm(grid, start, end):
@@ -440,8 +443,9 @@ def translate(deg, omega, Speed=1, distance='inf'): # ANJHITA
     Rmotor.setVelocity(C[1])
     Bmotor.setVelocity(C[2])
 
-def rotate(deg): 
-    rad = 1 #WIP
+def rotate(deg, bearing):
+    pid_rotate = PID(0.01, 0.01, 0.0001, setpoint = 0)
+    return pid_rotate(deg - bearing)
 
 # ANJHITA
 def calc_degree(p1,p2): # ANJHITA
@@ -462,8 +466,8 @@ def calc_degree(p1,p2): # ANJHITA
     return degree
 
 # ANJHITA
-def calc_omega(degree): # ANJHITA
-    pid_omega = PID(0.08, 0.01, 0.0001, setpoint = 0)
+def calc_omega(degree, P, I, D): # ANJHITA
+    pid_omega = PID(P, I, D, setpoint = 0)
     degree = degree - 90
     if degree > 180: degree = degree - 360
     if degree < -180: degree = 360 - degree
@@ -473,9 +477,21 @@ def calc_omega(degree): # ANJHITA
 # ANJHITA
 def calc_speed(p1,p2,speed,f,threshold): # ANJHITA
     distance_to_target = math.sqrt((p2[0] - p1[0])**2 + (p2[1] - p1[1])**2)
+    #print(distance_to_target)
     if distance_to_target < threshold:
-            speed = min(speed, 5 + (distance_to_target / f))  # Scaled speed
+            speed = min(speed, (distance_to_target / f))  # Scaled speed
     return speed
+
+def calc_speed_PID(p1, p2, max_speed):
+    distance_to_target = math.sqrt((p2[0] - p1[0])**2 + (p2[1] - p1[1])**2)
+    pid_speed = PID(1.5, 0.8, 0.001 , setpoint = 0)
+    speed = abs(pid_speed(distance_to_target))
+
+    return min(speed, max_speed)
+
+def dist_calc(p1, p2):
+    return math.sqrt((p2[0] - p1[0])**2 + (p2[1] - p1[1])**2)
+
 
 stuck = [False, 0.0, (0,0)]  # stuck state, last time, last gps position
 
@@ -483,7 +499,7 @@ stuck = [False, 0.0, (0,0)]  # stuck state, last time, last gps position
 def is_stuck(threshold,stuck,gps_pxl):
     current_time = time.time()
     diff = current_time - stuck[1]
-    if diff >= 1:
+    if diff >= 2:
         stuck[1] = current_time
         last_gps_pxl = stuck[2]
         dist =  math.sqrt( (last_gps_pxl[1] - gps_pxl[1])**2 + (last_gps_pxl[0] - gps_pxl[0])**2 )
@@ -498,6 +514,22 @@ def is_stuck(threshold,stuck,gps_pxl):
 
 def rp(v):
     return round(v, 1)
+
+
+
+def read_receiver():
+    data = ''
+    while receiver.getQueueLength() > 0 and robot.step(TIME_STEP) != -1:
+        data = receiver.getString()
+        receiver.nextPacket()
+    return data
+
+# Wait for Signal:
+def get_serial_data():
+    signal = read_receiver()
+    if signal == "Robotino Reached":
+        print("RECEIVED: " + signal )
+    return signal
 
 
 
@@ -522,6 +554,7 @@ while robot.step(TIME_STEP) != -1:
     path_follow_mode = True
     explore_mode = False
     navigation = True
+    reached = False
     ir_threshold = max(ir_read_pxl(ir))-0.015
 
     print("Robotino Controller\n==================\n")
@@ -540,28 +573,34 @@ while robot.step(TIME_STEP) != -1:
             #print(grid)
             grid_loaded = True
             run = False
-            time.sleep(0.5)
+            time.sleep(0.2)
 
         elif key==ord('2'):
-            time.sleep(0.5)
+            time.sleep(0.2)
 
         elif key==ord('3'):
             if not grid_loaded: grid = make_grid(ROWS, WIDTH)
             grid_loaded = True
             print("NEW GRID CREATED")
             run = False
-            time.sleep(0.5)
+            time.sleep(0.2)
 
         elif key==ord('4'):
             explore_mode = True
             print("EXPLORE MODE - True")
-            time.sleep(0.5)
+            time.sleep(0.2)
 
-        elif key==Keyboard.CONTROL+ord('S'):
+        elif key==ord('5'):
+            explore_mode = True
+            print("SENDING")
+            emitter.send("Robotino Reached")
+            time.sleep(0.2)
+
+        elif key==ord('S'):
             save_grid_file(grid,grid_file_address)
-            time.sleep(0.5)
+            time.sleep(0.2)
 
-        elif key==Keyboard.CONTROL+ord('R') and grid_loaded:
+        elif key==ord('R') and grid_loaded:
             grid[5][5].make_start()
             grid[40][8].make_end()
             run = True
@@ -569,7 +608,8 @@ while robot.step(TIME_STEP) != -1:
 
 
     # ANJHITA
-    while run and robot.step(TIME_STEP) != -1: # Run Loop, the Navigation starts here.
+    # Run Loop, the Navigation starts here.
+    while run and robot.step(TIME_STEP) != -1: 
 
         # Map Calculation
         if calc_path == True and navigation == True:
@@ -597,11 +637,8 @@ while robot.step(TIME_STEP) != -1:
         display.fillOval(gps_pxl[1], gps_pxl[0], 2,2)
 
 
-        #print(obstacle_avoid_point(gps_pxl,(300 , 300 )))
-        #print(obstacle_polygon(ir_read_pxl(ir), IR_ANGLES, gps_pxl, bearing()-90))
-        #print(ir_read_pxl(ir))
-        #print(bearing())
-        #print(round(gpsX_pxl,1),round(gpsY_pxl,1), "  |  " ,LA_X , LA_Y )
+
+
         
 
         # MODES
@@ -610,11 +647,12 @@ while robot.step(TIME_STEP) != -1:
             if update_map_from_IR(grid, gps_pxl, IR_polygon, ir_threshold):
                 calc_path = True
 
-        if look_ahead == path_to_pxl(path)[-1]:
+        if look_ahead == path_to_pxl(path)[-1] and path_follow_mode == True:
             #save_grid_file(grid,grid_file_address)
-            print("Reached")
+            print("Path Finding Complete")
             path_follow_mode = False
             stuck_mode = False
+            explore_mode = False
             #run = False
             navigation = False
             clear_path(grid)
@@ -624,8 +662,8 @@ while robot.step(TIME_STEP) != -1:
 
         if path_follow_mode == True:
             degree = calc_degree(gps_pxl, look_ahead)
-            speed = calc_speed(gps_pxl, look_ahead, 20, 0.01, 5)
-            omega = calc_omega(degree)
+            speed = calc_speed(gps_pxl, look_ahead, 10, 0.01, 5)
+            omega = calc_omega(degree, 0.08, 0.01, 0.0001)
             #calc_omega(degree, bearing())
             if centroid_dist > 0.1:
                 avoidance_degree =  calc_degree(gps_pxl, (cx , cy))
@@ -636,7 +674,7 @@ while robot.step(TIME_STEP) != -1:
                 translate(degree, omega, speed)
                 pass
                
-            stuck = is_stuck(3,stuck,gps_pxl)
+            stuck = is_stuck(1,stuck,gps_pxl)
 
             if stuck[0] == True:
                 print("Stuck!")
@@ -648,6 +686,7 @@ while robot.step(TIME_STEP) != -1:
 
         if bumper.getValue() == 1:
             stuck_mode = True
+            start = new_start_node(grid,gps_pxl)
             print('Bump!')
 
         if stuck_mode == True:
@@ -676,12 +715,44 @@ while robot.step(TIME_STEP) != -1:
             translate(degree,0,20)
 
         #  till here ANJHITA
-        if navigation == False:
-            #degree = calc_degree((gpsX, gpsY), path_to_pxl(path)[-1])
-            #speed = calc_speed(gps_pxl, path_to_pxl(path)[-1], 20, 0.01, 5)
-            #omega = calc_omega(degree)
-            #translate(degree, 0, 0.5)
-            print(gpsX, "  ,  ", gpsY)
+
+        # Final Navigation
+        if navigation == False and reached == False:
+            final_point = (15, 88)
+            current_bearing = bearing()
+            degree = calc_degree(gps_pxl, final_point)
+            speed = calc_speed_PID(gps_pxl, final_point, 5)
+            omega = calc_omega(current_bearing - 180 , 0.01, 0, 1)
+
+            if dist_calc(gps_pxl, final_point) > 0.5:
+                translate(degree, omega, speed)
+
+            if current_bearing > 89 and current_bearing < 91:
+                translate(degree, 0, speed) 
+
+            if dist_calc(gps_pxl, final_point) <= 0.5 and current_bearing > 89 and current_bearing < 91:
+                translate(0, 0, 0) # STOP
+                print("Reached")
+                reached = True
+                emitter.send("Robotino Reached")
+
+
+        # Transmit signal
+        if reached == True:
+            if get_serial_data() == 'Bottle Picked':
+                grid = make_grid(ROWS, WIDTH)
+                grid[5][5].make_end()
+                grid[40][9].make_start()
+                run = True
+                calc_path = True
+                stuck_mode = False
+                path_follow_mode = True
+                explore_mode = True
+                navigation = True
+                reached = False
+                grid = load_grid_file(grid_file_address)
+                grid_loaded = True
+            
             pass
 
 
